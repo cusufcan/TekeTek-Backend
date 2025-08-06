@@ -92,13 +92,13 @@ Aşağıdaki JSON formatında yanıt ver:
   "strengths": ["Kullanıcının güçlü argüman noktaları listesi"],
   "weaknesses": ["Kullanıcının eksik veya zayıf argüman noktaları listesi"]
 }
-Sadece geçerli bir JSON yanıt döndür, açıklama ekleme. Türkçe yanıt ver.
+Kesinlikle başına veya sonuna \`\`\`json, \`\`\` gibi Markdown kod bloğu ekleme.
+Hiçbir ek açıklama veya metin yazma. Sadece geçerli JSON döndür. Türkçe yanıt ver.
 `;
 
   try {
     const geminiRes = await axios.post(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" +
-        process.env.GEMINI_API_KEY,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
       {
         contents: [
           {
@@ -108,19 +108,26 @@ Sadece geçerli bir JSON yanıt döndür, açıklama ekleme. Türkçe yanıt ver
       }
     );
 
-    const rawText =
+    let rawText =
       geminiRes.data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-    console.log(rawText);
+    console.log("Gemini raw output:", rawText);
+
+    rawText = rawText
+      .replace(/```json\s*/gi, "")
+      .replace(/```\s*/g, "")
+      .trim();
 
     let parsedJson;
     try {
       parsedJson = JSON.parse(rawText);
     } catch (parseError) {
       console.error("JSON parse hatası:", parseError);
-      return res.status(500).json({ error: "Geçersiz JSON formatı" });
+      return res.status(500).json({
+        error: "Geçersiz JSON formatı",
+        raw: rawText,
+      });
     }
 
-    // Hafızadan sil
     delete debates[debateId];
 
     res.json({
