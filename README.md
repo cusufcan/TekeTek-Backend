@@ -1,6 +1,10 @@
 # Teke Tek Backend
 
-Teke Tek Backend, Teke Tek Android münazara uygulamasının Node.js tabanlı backend servisidir. Kullanıcıların yapay zekâ ile münazara başlatmasına, devam ettirmesine ve sonunda tartışma özetini almasına olanak sağlar. BTK AI Hackathon 2025 kapsamında geliştirilmiştir.
+Teke Tek Backend, Teke Tek Android münazara uygulamasının Node.js tabanlı backend servisidir.
+
+Kullanıcıların yapay zekâ ile münazara başlatmasına, devam ettirmesine ve sonunda tartışma özetini almasına olanak sağlar.
+
+BTK AI Hackathon 2025 kapsamında geliştirilmiştir.
 
 ## Özellikler
 - Münazara başlatma (konu belirleyerek oturum oluşturma)
