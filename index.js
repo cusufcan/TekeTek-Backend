@@ -110,6 +110,7 @@ Sadece geçerli bir JSON yanıt döndür, açıklama ekleme. Türkçe yanıt ver
 
     const rawText =
       geminiRes.data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+    console.log(rawText);
 
     let parsedJson;
     try {
