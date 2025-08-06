@@ -2,18 +2,50 @@ import axios from "axios";
 import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
+import { v4 as uuidv4 } from "uuid";
 
 dotenv.config();
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "2kb" }));
 
 const PORT = process.env.PORT || 8080;
 
-app.post("/api/debate", async (req, res) => {
-  const { topic, userArgument } = req.body;
+const debates = {};
 
-  const prompt = `Konu: ${topic}\nKullanıcının argümanı: "${userArgument}"\nBu argümana karşı çıkan, mantıklı ve ciddi bir karşı argüman üret. 100 kelimeyi geçme.`;
+app.post("/debate/start", (req, res) => {
+  const { topic } = req.body;
+  if (!topic) return res.status(400).json({ error: "Konu gerekli" });
+
+  const debateId = uuidv4();
+  debates[debateId] = {
+    topic,
+    history: [],
+    turn: 0,
+  };
+
+  res.json({ debateId, message: "Münazara başladı", topic });
+});
+
+app.post("/debate/next", async (req, res) => {
+  const { debateId, userArgument } = req.body;
+
+  if (!debateId || !userArgument)
+    return res.status(400).json({ error: "debateId ve userArgument gerekli" });
+
+  const debate = debates[debateId];
+  if (!debate) return res.status(404).json({ error: "Münazara bulunamadı" });
+
+  debate.turn++;
+  debate.history.push({ speaker: "Kullanıcı", text: userArgument });
+
+  const prompt = `
+Konu: ${debate.topic}
+Geçmiş konuşmalar:
+${debate.history.map((m) => `${m.speaker}: ${m.text}`).join("\n")}
+Kullanıcının son argümanına karşı çıkan, mantıklı ve ciddi bir karşı argüman üret. 
+100 kelimeyi geçme. Türkçe yaz.
+`;
 
   try {
     const geminiRes = await axios.post(
@@ -31,7 +63,69 @@ app.post("/api/debate", async (req, res) => {
     const responseText =
       geminiRes.data.candidates?.[0]?.content?.parts?.[0]?.text ??
       "Cevap alınamadı.";
-    res.json({ counterArgument: responseText });
+
+    debate.history.push({ speaker: "Model", text: responseText });
+
+    res.json({ counterArgument: responseText, turn: debate.turn });
+  } catch (error) {
+    console.error(error.response?.data || error.message);
+    res.status(500).json({ error: "Gemini API hatası" });
+  }
+});
+
+app.post("/debate/end", async (req, res) => {
+  const { debateId } = req.body;
+  const debate = debates[debateId];
+  if (!debate) {
+    return res.status(404).json({ error: "Münazara bulunamadı" });
+  }
+
+  const prompt = `
+Konu: ${debate.topic}
+Tüm konuşma geçmişi:
+${debate.history.map((m) => `${m.speaker}: ${m.text}`).join("\n")}
+
+Görev:
+Aşağıdaki JSON formatında yanıt ver:
+{
+  "summary": "Tartışmanın genel özeti (maksimum 150 kelime)",
+  "strengths": ["Kullanıcının güçlü argüman noktaları listesi"],
+  "weaknesses": ["Kullanıcının eksik veya zayıf argüman noktaları listesi"]
+}
+Sadece geçerli bir JSON yanıt döndür, açıklama ekleme. Türkçe yanıt ver.
+`;
+
+  try {
+    const geminiRes = await axios.post(
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" +
+        process.env.GEMINI_API_KEY,
+      {
+        contents: [
+          {
+            parts: [{ text: prompt }],
+          },
+        ],
+      }
+    );
+
+    const rawText =
+      geminiRes.data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+
+    let parsedJson;
+    try {
+      parsedJson = JSON.parse(rawText);
+    } catch (parseError) {
+      console.error("JSON parse hatası:", parseError);
+      return res.status(500).json({ error: "Geçersiz JSON formatı" });
+    }
+
+    // Hafızadan sil
+    delete debates[debateId];
+
+    res.json({
+      ...parsedJson,
+      message: "Münazara sonlandırıldı ve analiz yapıldı.",
+    });
   } catch (error) {
     console.error(error.response?.data || error.message);
     res.status(500).json({ error: "Gemini API hatası" });
